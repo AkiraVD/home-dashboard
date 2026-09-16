@@ -1,0 +1,26 @@
+# systemd user unit: system monitor + web terminal.
+# Listens on $XDG_RUNTIME_DIR/home-dashboard/dash.sock; published to the tailnet with
+#   sudo tailscale serve --bg --https=443 unix:/run/user/1000/home-dashboard/dash.sock
+# (serving a Unix socket needs root, even for the Tailscale operator user)
+# Install: cp home-dashboard.service ~/.config/systemd/user/ && systemctl --user daemon-reload
+#          systemctl --user enable --now home-dashboard
+[Unit]
+Description=home-dashboard (system monitor + web terminal)
+StartLimitIntervalSec=0
+
+[Service]
+WorkingDirectory=/media/akiravd/Data/app/home-dashboard
+# The only Tailscale login allowed in; unset means nobody gets in.
+Environment=HD_ALLOWED_LOGIN=you@example.com
+Environment=PYTHONUNBUFFERED=1
+RuntimeDirectory=home-dashboard
+RuntimeDirectoryMode=0700
+ExecStart=/media/akiravd/Data/app/home-dashboard/venv/bin/python -m app
+Restart=always
+RestartSec=5
+# Deliberately no NoNewPrivileges/ProtectSystem/PrivateTmp: the web terminal must
+# behave like a normal login shell, and sudo is setuid.
+# Restarting this unit ends every open web-terminal shell.
+
+[Install]
+WantedBy=default.target

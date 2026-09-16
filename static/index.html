@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Home dashboard</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/vendor/uPlot.min.css">
+<link rel="stylesheet" href="/static/vendor/xterm.css">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/theme.js"></script>
+<script src="/static/vendor/uPlot.iife.min.js" defer></script>
+<script src="/static/vendor/xterm.js" defer></script>
+<script src="/static/vendor/addon-fit.js" defer></script>
+<script src="/static/app.js" defer></script>
+<script src="/static/term.js" defer></script>
+<script src="/static/claude.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap topbar-row">
+    <div class="brand">
+      <span class="host" id="hostname">Home dashboard</span>
+      <span class="host-sub" id="host-sub"></span>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button class="tab" role="tab" id="tab-overview" aria-controls="view-overview" aria-selected="true">Overview</button>
+      <button class="tab" role="tab" id="tab-terminal" aria-controls="view-terminal" aria-selected="false">Terminal</button>
+      <button class="tab" role="tab" id="tab-claude" aria-controls="view-claude" aria-selected="false">Claude</button>
+    </nav>
+    <div class="top-right">
+      <span class="conn" id="conn" data-state="connecting"><span class="conn-dot" aria-hidden="true"></span><span id="conn-text">Connecting…</span></span>
+      <button class="btn ghost" id="theme-btn" type="button" title="Switch theme">Dark</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- ================= Overview ================= -->
+  <section id="view-overview" role="tabpanel" aria-labelledby="tab-overview">
+    <div class="cards">
+      <article class="card" id="card-cpu">
+        <header class="card-h"><h2>CPU</h2><span class="card-sub" id="cpu-model"></span></header>
+        <div class="stats">
+          <div class="stat"><div class="stat-label">Usage</div><div class="stat-value" id="cpu-total">–</div></div>
+          <div class="stat"><div class="stat-label">Load 1 / 5 / 15 min</div><div class="stat-value sm" id="cpu-load">–</div></div>
+          <div class="stat"><div class="stat-label">Frequency</div><div class="stat-value sm" id="cpu-freq">–</div></div>
+        </div>
+        <div class="cores" id="cpu-cores"></div>
+        <div class="chart" id="chart-cpu"></div>
+        <div class="legend" id="legend-cpu"></div>
+      </article>
+
+      <article class="card" id="card-mem">
+        <header class="card-h"><h2>Memory</h2><span class="card-sub" id="mem-total"></span></header>
+        <div class="stats">
+          <div class="stat"><div class="stat-label">In use</div><div class="stat-value" id="mem-pct">–</div></div>
+          <div class="stat"><div class="stat-label">Used</div><div class="stat-value sm" id="mem-used">–</div></div>
+          <div class="stat"><div class="stat-label">Cache</div><div class="stat-value sm" id="mem-cache">–</div></div>
+          <div class="stat"><div class="stat-label">Swap</div><div class="stat-value sm" id="swap-used">–</div></div>
+        </div>
+        <div class="meter-row" id="mem-meter"></div>
+        <div class="chart" id="chart-mem"></div>
+        <div class="legend" id="legend-mem"></div>
+      </article>
+
+      <article class="card" id="card-gpu">
+        <header class="card-h"><h2>GPU</h2><span class="card-sub" id="gpu-name"></span></header>
+        <div class="stats">
+          <div class="stat"><div class="stat-label">Utilization</div><div class="stat-value" id="gpu-util">–</div></div>
+          <div class="stat"><div class="stat-label">VRAM</div><div class="stat-value sm" id="gpu-vram">–</div></div>
+          <div class="stat"><div class="stat-label">Power</div><div class="stat-value sm" id="gpu-power">–</div></div>
+        </div>
+        <p class="note" id="gpu-note" hidden></p>
+        <ul class="mini-list" id="gpu-procs"></ul>
+        <div class="chart" id="chart-gpu"></div>
+        <div class="legend" id="legend-gpu"></div>
+      </article>
+
+      <article class="card" id="card-temp">
+        <header class="card-h"><h2>Temperature</h2><span id="temp-chip"></span></header>
+        <div class="stats">
+          <div class="stat"><div class="stat-label">CPU package</div><div class="stat-value" id="temp-cpu">–</div></div>
+          <div class="stat"><div class="stat-label">GPU</div><div class="stat-value" id="temp-gpu">–</div></div>
+          <div class="stat"><div class="stat-label">Cores</div><div class="stat-value sm" id="temp-cores">–</div></div>
+        </div>
+        <div class="chart" id="chart-temp"></div>
+        <div class="legend" id="legend-temp"></div>
+      </article>
+
+      <article class="card" id="card-disk">
+        <header class="card-h"><h2>Disks</h2></header>
+        <div class="stats">
+          <div class="stat"><div class="stat-label">Read</div><div class="stat-value" id="disk-read">–</div></div>
+          <div class="stat"><div class="stat-label">Write</div><div class="stat-value" id="disk-write">–</div></div>
+        </div>
+        <div class="mounts" id="disk-mounts"></div>
+        <div class="chart" id="chart-disk"></div>
+        <div class="legend" id="legend-disk"></div>
+      </article>
+
+      <article class="card" id="card-net">
+        <header class="card-h"><h2>Network</h2></header>
+        <div class="stats">
+          <div class="stat"><div class="stat-label">Download</div><div class="stat-value" id="net-rx">–</div></div>
+          <div class="stat"><div class="stat-label">Upload</div><div class="stat-value" id="net-tx">–</div></div>
+        </div>
+        <ul class="mini-list" id="net-ifaces"></ul>
+        <div class="chart" id="chart-net"></div>
+        <div class="legend" id="legend-net"></div>
+      </article>
+
+      <article class="card" id="card-bat">
+        <header class="card-h"><h2>Battery</h2><span class="card-sub" id="bat-plug"></span></header>
+        <div class="stats">
+          <div class="stat"><div class="stat-label">Charge</div><div class="stat-value" id="bat-pct">–</div></div>
+          <div class="stat"><div class="stat-label">State</div><div class="stat-value sm" id="bat-state">–</div></div>
+          <div class="stat"><div class="stat-label">Power</div><div class="stat-value sm" id="bat-power">–</div></div>
+          <div class="stat"><div class="stat-label">Time</div><div class="stat-value sm" id="bat-time">–</div></div>
+        </div>
+        <div class="chart" id="chart-bat"></div>
+        <div class="legend" id="legend-bat"></div>
+      </article>
+    </div>
+
+    <section class="panel" aria-labelledby="sites-title">
+      <div class="panel-h"><h2 id="sites-title">Tailscale sites</h2><span class="panel-sub" id="sites-count"></span></div>
+      <div id="sites-body"><p class="note">Waiting for data…</p></div>
+    </section>
+
+    <section class="panel" aria-labelledby="proc-title">
+      <div class="panel-h">
+        <h2 id="proc-title">Processes</h2>
+        <span class="panel-sub" id="proc-count"></span>
+        <div class="panel-tools">
+          <input class="input" id="proc-search" type="search" placeholder="Filter by name, command, user or PID" aria-label="Filter processes">
+          <label class="check"><input type="checkbox" id="proc-group"> Group by app</label>
+        </div>
+      </div>
+      <div class="table-wrap tall">
+        <table class="table" id="proc-table">
+          <thead><tr id="proc-head"></tr></thead>
+          <tbody id="proc-body"></tbody>
+        </table>
+      </div>
+      <button class="btn ghost more" id="proc-more" type="button" hidden>Show all</button>
+    </section>
+
+    <div class="panels">
+      <section class="panel" aria-labelledby="docker-title">
+        <div class="panel-h"><h2 id="docker-title">Docker</h2><span class="panel-sub" id="docker-count"></span></div>
+        <div id="docker-body"><p class="note">Waiting for data…</p></div>
+      </section>
+
+      <section class="panel" aria-labelledby="svc-title">
+        <div class="panel-h"><h2 id="svc-title">Services</h2><span class="panel-sub" id="svc-count"></span></div>
+        <div id="svc-failed"><p class="note">Waiting for data…</p></div>
+        <details class="svc-running">
+          <summary>Running services</summary>
+          <div id="svc-running"></div>
+        </details>
+      </section>
+
+      <section class="panel" aria-labelledby="ports-title">
+        <div class="panel-h"><h2 id="ports-title">Listening ports</h2><span class="panel-sub" id="ports-count"></span></div>
+        <div class="table-wrap mid" id="ports-body"><p class="note">Waiting for data…</p></div>
+        <p class="note small">Processes owned by other users (root services) show no name without root.</p>
+      </section>
+    </div>
+  </section>
+
+  <!-- ================= Claude ================= -->
+  <section id="view-claude" role="tabpanel" aria-labelledby="tab-claude" hidden>
+    <section class="panel">
+      <div class="panel-h">
+        <h2>Claude projects</h2>
+        <span class="panel-sub" id="claude-count"></span>
+        <span class="note small">Start opens a terminal window on the laptop running <code>claude --remote-control</code>; work on it from claude.ai.</span>
+        <div class="panel-tools">
+          <span class="panel-sub" id="claude-updated"></span>
+          <button class="btn ghost" id="claude-refresh" type="button">Refresh</button>
+        </div>
+      </div>
+      <p class="msg" id="claude-note" hidden></p>
+      <div id="claude-body"><p class="note">Loading…</p></div>
+    </section>
+  </section>
+
+  <!-- ================= Terminal ================= -->
+  <section id="view-terminal" role="tabpanel" aria-labelledby="tab-terminal" hidden>
+    <p class="note" id="term-loading">Checking access…</p>
+
+    <div class="lock-card" id="term-setup" hidden>
+      <h2>Set up the second factor first</h2>
+      <p>The terminal needs a TOTP key. Open a terminal window <strong>on the laptop itself</strong> and run:</p>
+      <pre class="code" id="term-setup-cmd"></pre>
+      <p class="note">It shows a QR code for your authenticator app. Then come back here.</p>
+      <button class="btn primary" id="term-setup-retry" type="button">I've done it</button>
+    </div>
+
+    <form class="lock-card" id="term-lock" hidden autocomplete="off">
+      <h2>Unlock terminal</h2>
+      <p class="note" id="lock-who"></p>
+      <label for="otp" class="stat-label">6-digit code from your authenticator app</label>
+      <input class="input otp" id="otp" name="otp" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" autocomplete="one-time-code" required>
+      <button class="btn primary wide" id="otp-submit" type="submit">Unlock for 12 hours</button>
+      <p class="msg" id="lock-msg" role="alert"></p>
+    </form>
+
+    <div class="term-main" id="term-main" hidden>
+      <div class="term-toolbar">
+        <span class="conn" id="term-status" data-state="offline"><span class="conn-dot" aria-hidden="true"></span><span id="term-status-text">Not connected</span></span>
+        <span class="panel-sub" id="term-who"></span>
+        <div class="panel-tools">
+          <button class="btn ghost" id="term-font-dec" type="button" aria-label="Smaller text">A−</button>
+          <button class="btn ghost" id="term-font-inc" type="button" aria-label="Larger text">A+</button>
+          <button class="btn ghost" id="term-end" type="button">End session</button>
+          <button class="btn ghost" id="term-lock-btn" type="button">Lock</button>
+        </div>
+      </div>
+      <div class="term-wrap">
+        <div class="term-screen" id="term-screen"></div>
+        <div class="term-ended" id="term-ended" hidden>
+          <p id="term-ended-msg">Session ended.</p>
+          <button class="btn primary" id="term-restart" type="button">Start a new shell</button>
+        </div>
+      </div>
+      <div class="keybar" id="keybar" aria-label="Extra keys">
+        <button type="button" data-key="esc">Esc</button>
+        <button type="button" data-key="tab">Tab</button>
+        <button type="button" data-key="ctrl" aria-pressed="false">Ctrl</button>
+        <button type="button" data-key="alt" aria-pressed="false">Alt</button>
+        <button type="button" data-key="left" aria-label="Left">←</button>
+        <button type="button" data-key="up" aria-label="Up">↑</button>
+        <button type="button" data-key="down" aria-label="Down">↓</button>
+        <button type="button" data-key="right" aria-label="Right">→</button>
+        <button type="button" data-key="pipe">|</button>
+        <button type="button" data-key="tilde">~</button>
+        <button type="button" data-key="slash">/</button>
+        <button type="button" data-key="dash">-</button>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>
