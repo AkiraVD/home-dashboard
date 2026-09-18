@@ -26,14 +26,40 @@ def _save(secret: str) -> None:
     os.replace(tmp, config.TOTP_KEY_FILE)
 
 
+def _print_enrolment(secret: str, no_invert: bool) -> None:
+    label = f"{os.environ.get('USER', 'user')}@{socket.gethostname()}"
+    uri = pyotp.TOTP(secret).provisioning_uri(name=label, issuer_name="Home dashboard")
+    qr = qrcode.QRCode(border=2)
+    qr.add_data(uri)
+    qr.make(fit=True)
+    print("\nScan this with your authenticator app (Aegis, Google Authenticator, 2FAS, ...):\n")
+    qr.print_ascii(invert=not no_invert)
+    print("Can't scan? Enter this key manually (time-based, 6 digits, 30 s):")
+    print("   ", " ".join(secret[i:i + 4] for i in range(0, len(secret), 4)))
+    print()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Set up the TOTP second factor for the web terminal.")
     ap.add_argument("--force", action="store_true", help="replace the existing key (signs out every device)")
     ap.add_argument("--check", metavar="CODE", help="check a 6-digit code against the saved key")
+    ap.add_argument("--show", action="store_true",
+                    help="show the QR code for the existing key, to add it to another authenticator app")
     ap.add_argument("--no-invert", action="store_true", help="don't invert the QR code (for light terminals)")
     args = ap.parse_args()
 
     existing = config.TOTP_KEY_FILE.exists()
+    if args.show:
+        if not existing:
+            print("No TOTP key yet. Run this without --show to create one.")
+            return 1
+        if not sys.stdout.isatty():
+            print("Refusing to show the secret outside an interactive terminal.")
+            print("Open a terminal window on this machine and run the command there.")
+            return 2
+        _print_enrolment(config.TOTP_KEY_FILE.read_text().strip(), args.no_invert)
+        print("Same key as before: devices already set up keep working.")
+        return 0
     if args.check:
         if not existing:
             print("No TOTP key yet. Run this without --check first.")
@@ -52,17 +78,7 @@ def main() -> int:
         return 2
 
     secret = pyotp.random_base32()
-    label = f"{os.environ.get('USER', 'user')}@{socket.gethostname()}"
-    uri = pyotp.TOTP(secret).provisioning_uri(name=label, issuer_name="Home dashboard")
-
-    qr = qrcode.QRCode(border=2)
-    qr.add_data(uri)
-    qr.make(fit=True)
-    print("\nScan this with your authenticator app (Aegis, Google Authenticator, 2FAS, ...):\n")
-    qr.print_ascii(invert=not args.no_invert)
-    print("Can't scan? Enter this key manually (time-based, 6 digits, 30 s):")
-    print("   ", " ".join(secret[i:i + 4] for i in range(0, len(secret), 4)))
-    print()
+    _print_enrolment(secret, args.no_invert)
 
     for _ in range(3):
         code = input("Type the 6-digit code the app shows now to confirm: ").strip()
