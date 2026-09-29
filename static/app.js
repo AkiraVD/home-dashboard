@@ -498,8 +498,8 @@
   }
 
   function siteTile(s) {
-    const label = s.name || (s.kind === 'tcp' ? `TCP port ${s.port}` : (s.url || '').replace(/^https:\/\//, ''));
-    const link = s.url && s.url.startsWith('https://')
+    const label = s.name || (s.kind === 'tcp' ? `TCP port ${s.port}` : (s.url || '').replace(/^https?:\/\//, ''));
+    const link = s.url && /^https?:\/\//.test(s.url)
       ? el('a', { class: 'site-name', href: s.url, target: '_blank', rel: 'noopener noreferrer', title: `Open ${s.url}`, text: `${label} ↗` })
       : el('span', { class: 'site-name', text: label });
     let status;
@@ -514,7 +514,9 @@
       el('div', { class: 'site-meta' },
         el('span', { text: `→ ${s.target}` }),
         s.owner && s.owner !== s.name ? el('span', { text: s.owner }) : null,
-        s.public ? chip('serious', '▲', 'Public (Funnel)') : chip('idle', '●', 'Tailnet only')),
+        s.serve === false
+          ? chip('idle', '○', 'Not via serve')
+          : s.public ? chip('serious', '▲', 'Public (Funnel)') : chip('idle', '●', 'Tailnet only')),
       problem ? el('div', { class: 'site-err', text: problem }) : null);
   }
 
@@ -522,11 +524,13 @@
     const sites = d.sites || [];
     const checked = sites.filter((s) => s.probe);
     const up = checked.filter((s) => s.probe.up).length;
-    setText('sites-count', sites.length ? `${sites.length} published · ${up} of ${checked.length} up` : '');
+    setText('sites-count', sites.length ? `${sites.length} sites · ${up} of ${checked.length} up` : '');
     const body = $('sites-body');
     if (d.error) body.replaceChildren(el('p', { class: 'note', text: d.error }));
-    else if (!sites.length) body.replaceChildren(el('p', { class: 'note', text: 'Nothing is published with tailscale serve.' }));
-    else body.replaceChildren(el('div', { class: 'sites' }, ...sites.map(siteTile)));
+    else if (!sites.length) body.replaceChildren(el('p', { class: 'note', text: 'Nothing published with tailscale serve, and no links in sites.json.' }));
+    else body.replaceChildren(
+      ...(d.config_error ? [el('p', { class: 'note', text: d.config_error })] : []),
+      el('div', { class: 'sites' }, ...sites.map(siteTile)));
   }
 
   function applyViews(m) {

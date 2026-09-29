@@ -14,6 +14,8 @@ SOCKET_PATH = Path(os.environ.get("HD_SOCKET") or RUNTIME_DIR / "home-dashboard"
 TOTP_KEY_FILE = CONFIG_DIR / "totp.key"
 COOKIE_KEY_FILE = CONFIG_DIR / "cookie.key"
 AUDIT_LOG = STATE_DIR / "audit.log"
+# Optional: names for published sites and extra links that are not behind Serve.
+SITES_FILE = CONFIG_DIR / "sites.json"
 
 # The only Tailscale login allowed in. Unset means nobody (fail closed).
 ALLOWED_LOGIN = os.environ.get("HD_ALLOWED_LOGIN", "").strip()

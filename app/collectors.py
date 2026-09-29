@@ -559,6 +559,39 @@ async def _port_owners(docker: DockerCollector) -> dict[int, str]:
     return owners
 
 
+_sites_cfg: tuple[float, dict[int, str], list[dict], str | None] = (0.0, {}, [], None)
+
+
+def _load_sites_config() -> tuple[dict[int, str], list[dict], str | None]:
+    """(names by port, extra links, error) from sites.json. Cached on mtime; absent is fine."""
+    global _sites_cfg
+    try:
+        mtime = config.SITES_FILE.stat().st_mtime
+    except OSError:
+        return {}, [], None
+    if mtime == _sites_cfg[0]:
+        return _sites_cfg[1], _sites_cfg[2], _sites_cfg[3]
+
+    names: dict[int, str] = {}
+    links: list[dict] = []
+    error = None
+    try:
+        raw = json.loads(config.SITES_FILE.read_text())
+        for port, name in (raw.get("names") or {}).items():
+            names[int(port)] = str(name)
+        for item in raw.get("links") or []:
+            url = str(item.get("url") or "").strip()
+            if not url:
+                continue
+            name = item.get("name")
+            links.append({"url": url, "target": str(item.get("probe") or url),
+                          "name": str(name).strip() if name else None})
+    except (OSError, ValueError, TypeError, AttributeError) as e:
+        names, links, error = {}, [], f"Ignoring {config.SITES_FILE.name}: {e}"
+    _sites_cfg = (mtime, names, links, error)
+    return names, links, error
+
+
 async def tailscale_sites(docker: DockerCollector) -> dict:
     try:
         cfg = await run_json("tailscale", "serve", "status", "--json", default="{}")
@@ -573,7 +606,7 @@ async def tailscale_sites(docker: DockerCollector) -> dict:
         base = f"https://{host}" + ("" if port == "443" else f":{port}")
         for path, handler in sorted((web.get("Handlers") or {}).items()):
             site = {"url": base + path, "port": int(port), "public": bool(funnel.get(hostport)),
-                    "probe": None, "name": None, "owner": None}
+                    "probe": None, "name": None, "owner": None, "serve": True}
             if "Proxy" in handler:
                 site.update(kind="proxy", target=handler["Proxy"])
             elif "Path" in handler:
@@ -584,7 +617,19 @@ async def tailscale_sites(docker: DockerCollector) -> dict:
     for port, tcp in (cfg.get("TCP") or {}).items():
         if tcp.get("TCPForward"):
             sites.append({"url": None, "port": int(port), "public": False, "kind": "tcp",
-                          "target": tcp["TCPForward"], "probe": None, "name": None, "owner": None})
+                          "target": tcp["TCPForward"], "probe": None, "name": None,
+                          "owner": None, "serve": True})
+
+    names, links, cfg_error = _load_sites_config()
+    for link in links:
+        try:
+            u = urlsplit(link["url"])
+            port = u.port or (443 if u.scheme == "https" else 80)
+        except ValueError:
+            port = 0
+        sites.append({"url": link["url"], "port": port, "public": False, "kind": "proxy",
+                      "target": link["target"], "probe": None, "name": link["name"],
+                      "owner": None, "serve": False})
 
     owners = await _port_owners(docker)
 
@@ -601,8 +646,11 @@ async def tailscale_sites(docker: DockerCollector) -> dict:
             except ValueError:
                 pass
         site["probe"] = await _probe(target)
-        site["name"] = site["probe"].get("title") or site["owner"]
+        site["name"] = site["name"] or site["probe"].get("title") or site["owner"]
 
     await asyncio.gather(*(fill(s) for s in sites))
+    for site in sites:
+        if site["port"] in names:
+            site["name"] = names[site["port"]]
     sites.sort(key=lambda s: (s["port"], s["url"] or ""))
-    return {"sites": sites}
+    return {"sites": sites, "config_error": cfg_error} if cfg_error else {"sites": sites}
