@@ -57,7 +57,9 @@ def _decode_dir(encoded: str) -> str | None:
     return _decoded[encoded]
 
 
-def _cwd_from_session(path: Path) -> str | None:
+def _session_meta(path: Path) -> tuple[str | None, str | None]:
+    """(cwd, entrypoint) from the first records of a conversation file."""
+    cwd = entrypoint = None
     try:
         with path.open(errors="replace") as f:
             for _ in range(20):
@@ -68,11 +70,20 @@ def _cwd_from_session(path: Path) -> str | None:
                     record = json.loads(line)
                 except ValueError:
                     continue
-                if isinstance(record, dict) and record.get("cwd"):
-                    return record["cwd"]
+                if isinstance(record, dict):
+                    cwd = cwd or record.get("cwd")
+                    entrypoint = entrypoint or record.get("entrypoint")
+                if cwd and entrypoint:
+                    break
     except OSError:
         pass
-    return None
+    return cwd, entrypoint
+
+
+def _continuable(path: Path) -> bool:
+    # `claude --continue` skips conversations made by `claude -p` / the SDK (entrypoint sdk-*).
+    _, entrypoint = _session_meta(path)
+    return not (entrypoint or "").startswith("sdk")
 
 
 def list_projects() -> list[dict]:
@@ -86,12 +97,13 @@ def list_projects() -> list[dict]:
             sessions = sorted(d.rglob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
         except OSError:
             sessions = []
-        path = (_cwd_from_session(sessions[0]) if sessions else None) or _decode_dir(d.name)
+        path = (_session_meta(sessions[0])[0] if sessions else None) or _decode_dir(d.name)
         out.append({
             "id": d.name,
             "path": path,
             "name": os.path.basename(path) if path else d.name,
             "sessions": len(sessions),
+            "can_continue": any(_continuable(p) for p in sessions),
             "last_used": sessions[0].stat().st_mtime if sessions else None,
             "exists": bool(path and os.path.isdir(path)),
         })

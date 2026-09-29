@@ -124,7 +124,9 @@
     nameInput.value = S.form.name;
     nameInput.addEventListener('input', () => { S.form.name = nameInput.value; });
     const cont = el('input', { type: 'checkbox' });
-    cont.checked = S.form.cont;
+    const canContinue = p.can_continue ?? p.sessions > 0;
+    cont.checked = canContinue && S.form.cont;
+    cont.disabled = !canContinue;
     cont.addEventListener('change', () => { S.form.cont = cont.checked; });
     const msg = el('p', { class: 'msg' });
     const submit = el('button', { class: 'btn primary', type: 'submit', text: 'Start session' });
@@ -133,6 +135,7 @@
     const form = el('form', { class: 'cstart' },
       el('label', { class: 'stat-label' }, 'Remote Control session name', nameInput),
       el('label', { class: 'check' }, cont, ' Continue the most recent conversation'),
+      canContinue ? null : el('p', { class: 'note', text: 'No conversation here that Claude can continue, so this starts a new one.' }),
       el('div', { class: 'cstart-actions' }, submit, cancel),
       msg);
     cancel.addEventListener('click', closeForm);

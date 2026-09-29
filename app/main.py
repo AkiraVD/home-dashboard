@@ -164,7 +164,8 @@ async def claude_start(request: Request):
     if not project or not project["path"]:
         return JSONResponse({"ok": False, "error": "Unknown project folder."}, 404)
     name = (str(body.get("name", "")).strip() or project["name"])
-    keep_going = bool(body.get("continue", True))
+    # --continue with nothing to continue makes Claude quit at once, leaving an empty shell.
+    keep_going = bool(body.get("continue", True)) and project["can_continue"]
 
     result = await claude_sessions.start(project["path"], name, keep_going)
     v = auth.visitor(request.headers)
