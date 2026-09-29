@@ -51,6 +51,31 @@ def _clamp(value, lo, hi, default):
         return default
 
 
+_scope_ok: bool | None = None
+
+
+def _scope_prefix(unit: str) -> list[str]:
+    """Put the shell in a transient scope of its own, if systemd will give us one.
+
+    Whatever the shell starts inherits our control group, and detaching with
+    `setsid -f` escapes end_session() below but not the group. Such a process
+    then stays charged to this service for as long as it lives, and a stop of
+    the service tries to kill it. Its own scope keeps both where they belong.
+    """
+    global _scope_ok
+    if _scope_ok is None:
+        try:
+            _scope_ok = subprocess.run(
+                ["systemd-run", "--user", "--scope", "--collect", "--quiet", "--", "true"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+            ).returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            _scope_ok = False
+    # --scope execs in place, so the pid Popen returns is still the session leader.
+    return ["systemd-run", "--user", "--scope", "--collect", "--quiet",
+            "--unit", unit, "--"] if _scope_ok else []
+
+
 class Session:
     def __init__(self, cols: int, rows: int):
         user = pwd.getpwuid(os.getuid())
@@ -60,7 +85,8 @@ class Session:
             # `setsid --ctty` makes the pty the shell's controlling terminal, which
             # sudo needs to prompt for a password (and bash needs for job control).
             self.proc = subprocess.Popen(
-                ["setsid", "--ctty", user.pw_shell or "/bin/bash", "-l"],
+                [*_scope_prefix(f"hd-term-{secrets.token_hex(4)}"),
+                 "setsid", "--ctty", user.pw_shell or "/bin/bash", "-l"],
                 stdin=slave, stdout=slave, stderr=slave,
                 cwd=user.pw_dir, env=_shell_env(user), close_fds=True,
             )
